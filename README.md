@@ -1,5 +1,7 @@
 # SYMPATHIQUE-Wheat
 
+
+![](https://github.com/and-jonas/sympathique-wheat/blob/master/imgs/original.JPG)
 ![](https://github.com/and-jonas/sympathique-wheat/blob/master/imgs/overlay.gif)
 
 This repository contains code for co-registration of wheat leaf images, corresponding segmentation or point masks, and for for lesion and leaf trait extraction from image series.
