@@ -1,4 +1,4 @@
-![pycn_dev](https://github.com/and-jonas/sympathique-wheat/assets/43540490/8dca5ef4-08e9-4d42-9678-ba709ca93957)# SYMPATHIQUE-Wheat
+# SYMPATHIQUE-Wheat
 
 
 ![](https://github.com/and-jonas/sympathique-wheat/blob/master/imgs/original.JPG)
