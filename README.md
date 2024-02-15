@@ -10,7 +10,8 @@ This repository contains code for co-registration of wheat leaf images, correspo
 > ETH Zürich  
 
 ## Installation
-All the necessary libraries and their dependencies can be installed with `conda env create -f env.yml`. This creates a new conda environment named wheat-segmentation-models.
+All the necessary libraries and their dependencies can be installed with `conda env create -f env.yml`. This creates a new conda environment named xx.
+coming soon
 
 ## Data
 Data sets are available via the ETH Zürich publications and research data repository:
