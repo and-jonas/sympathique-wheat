@@ -1,4 +1,11 @@
 
+# ======================================================================================================================
+# Various helper functions for processing of lesions
+# Author: Jonas Anderegg jonas.anderegg@usys.ethz.ch
+# Last modified 2024-02-15
+# ======================================================================================================================
+
+
 import math
 import scipy.interpolate as si
 from skimage.draw import line

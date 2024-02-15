@@ -1,6 +1,8 @@
 
 # ======================================================================================================================
-# Script to track developing lesions in time series of images and extract data for each lesion
+# Tracks developing lesions in time series of images and extracts data for each lesion and leaf
+# Author: Jonas Anderegg jonas.anderegg@usys.ethz.ch
+# Last modified 2024-02-15
 # ======================================================================================================================
 
 from pathlib import Path

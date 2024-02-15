@@ -1,4 +1,11 @@
 
+# ======================================================================================================================
+# Aligns Masks using the estimated transformation from 02
+# Author: Jonas Anderegg jonas.anderegg@usys.ethz.ch
+# Last modified 2024-02-15
+# ======================================================================================================================
+
+
 from Processors.MaskAligner import transform_mask
 
 import glob
@@ -14,10 +21,10 @@ if __name__ == '__main__':
 
     # list all samples for which the transformation was successful
     existing_output = glob.glob(f'{base_dir}/*/result/piecewise/*.JPG')
-    bnames = [os.path.basename(x).replace(".JPG", "") for x in existing_output]
+    b_names = [os.path.basename(x).replace(".JPG", "") for x in existing_output]
 
     # list all that can be processed
-    masks = [m for m in masks if os.path.basename(m).replace(".png", "") in bnames]
+    masks = [m for m in masks if os.path.basename(m).replace(".png", "") in b_names]
 
     # get number of samples to process
     n = len(masks)

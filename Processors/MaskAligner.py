@@ -1,6 +1,8 @@
 
 # ======================================================================================================================
 # Aligns Masks using the estimated transformation from 02
+# Author: Jonas Anderegg jonas.anderegg@usys.ethz.ch
+# Last modified 2024-02-15
 # ======================================================================================================================
 
 from PIL import Image
@@ -34,9 +36,7 @@ def transform_mask(base_dir, path_to_mask, n_classes, kpt_cls):
     img = Image.open(image)
     img = np.asarray(img)
 
-    # ==================================================================================================================
-
-    # get the target (warped roi)
+    # get target (warped roi)
     target = Image.open(f"{base_dir}/{leaf_name}/result/piecewise/{stem_name}.JPG")
     target = np.asarray(target)
 
@@ -65,11 +65,9 @@ def transform_mask(base_dir, path_to_mask, n_classes, kpt_cls):
     full_mask = np.zeros((5464, 8192)).astype("uint8")
     full_mask[mh - 1024:mh + 1024, :] = mask
 
-    # ==================================================================================================================
-    # Transform the mask
-    # ==================================================================================================================
+    # Transform the mask ===============================================================================================
 
-    # get rid of the points
+    # remove points
     segmentation_mask = base_utils.remove_points_from_mask(mask=full_mask, classes=kpt_cls)
 
     # rotate mask
@@ -87,9 +85,7 @@ def transform_mask(base_dir, path_to_mask, n_classes, kpt_cls):
     else:
         warped = roi
 
-    # ==================================================================================================================
-    # Transform points, add to mask
-    # ==================================================================================================================
+    # Transform points, add to mask ====================================================================================
 
     # warp points
     if tform is not None:
@@ -105,9 +101,7 @@ def transform_mask(base_dir, path_to_mask, n_classes, kpt_cls):
     else:
         complete = warped
 
-    # ==================================================================================================================
-    # Output
-    # ==================================================================================================================
+    # Output ===========================================================================================================
 
     # transform to ease inspection
     complete = (complete.astype("uint32")) * 255 / n_classes

@@ -1,4 +1,11 @@
 
+# ======================================================================================================================
+# Tracks developing lesions in time series of images and extracts data for each lesion and leaf
+# Author: Jonas Anderegg jonas.anderegg@usys.ethz.ch
+# Last modified 2024-02-15
+# ======================================================================================================================
+
+
 from Processors.SymptomTracker import SymptomTracker
 
 
@@ -15,4 +22,3 @@ def run():
 
 if __name__ == "__main__":
     run()
-

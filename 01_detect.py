@@ -1,3 +1,11 @@
+
+# ======================================================================================================================
+# Detects reference marks in images and exports corresponding image coordinates
+# Author: Jonas Anderegg jonas.anderegg@usys.ethz.ch
+# Last modified 2024-02-15
+# ======================================================================================================================
+
+
 from ultralytics import YOLO
 import os
 from pathlib import Path
@@ -16,3 +24,4 @@ for d in dirs:
         conf=0.3,
         save_txt=True,
     )
+
