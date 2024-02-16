@@ -1,5 +1,8 @@
 # SYMPATHIQUE-Wheat
 
+**Image-based Tracking of <ins>Sy</ins>mptoms and <ins>M</ins>onitoring of <ins>Path</ins>ogenesis to decompose <ins>Qu</ins>antitative Disease Resistance**
+
+
 This repository contains code for co-registration of wheat leaf images, corresponding segmentation or point masks, and for for lesion and leaf trait extraction from image series.
 
 ![](https://github.com/and-jonas/sympathique-wheat/blob/master/imgs/original.JPG)
