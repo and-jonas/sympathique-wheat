@@ -5,15 +5,21 @@
 # Last modified 2024-02-15
 # ======================================================================================================================
 
+# Define the marking strategy used
+sidelines = True  # True if ESWW009, False if ESWW007
 
-from Processors.RoiAligner import RoiAligner
+# import the corresponding ROIAligner
+if sidelines:
+    from Processors.RoiAligner import RoiAligner2 as RoiAligner
+else:
+    from Processors.RoiAligner import RoiAligner
 
 
 def run():
     roi_aligner = RoiAligner(
-        path_labels='data/*/runs/pose/predict/labels',
-        path_images='data/*',
-        path_output='Output',
+        path_labels='data/2024/*/runs/pose/predict/labels',
+        path_images='data/2024/*',
+        path_output='Output2',
         n_cpus=6
     )
     roi_aligner.process_all()
