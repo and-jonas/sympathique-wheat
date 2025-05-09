@@ -1,0 +1,13 @@
+ultralytics
+pillow
+imageio
+matplotlib
+numpy
+pandas
+opencv-contrib-python==4.9.0.80
+imutils
+scikit-image
+scipy
+imageio
+natsort
+
