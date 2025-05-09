@@ -1,4 +1,3 @@
-import os
 
 # ======================================================================================================================
 # Aligns ROIs from images in a series
@@ -6,9 +5,8 @@ import os
 # Last modified 2024-02-15
 # ======================================================================================================================
 
-
 # Define the year (marking strategy used)
-year = 2024
+year = 2023
 
 def run():
     if year == 2024:
@@ -17,12 +15,18 @@ def run():
             path_labels=f'data/{year}/*/runs/pose/predict/labels',
             path_images=f'data/{year}/*',
             path_leaf_masks=None,  # not available at this stage
-            path_output='Output',
+            path_output='Output2',
             n_cpus=1
-        )
-        roi_aligner.process_all()
+    )
     elif year == 2023:
-        print("Leaf masks not required. Skipping.")
+        from Processors.RoiAligner import RoiAligner
+        roi_aligner = RoiAligner(
+            path_labels=f'data/{year}/*/runs/pose/predict/labels',
+            path_images=f'data/{year}/*',
+            path_output='Output2',
+            n_cpus=6
+        )
+    roi_aligner.process_all()
 
 
 if __name__ == "__main__":

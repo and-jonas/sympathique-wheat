@@ -391,7 +391,7 @@ class RoiAligner:
 
             # Build up job queue
             for lseries, iseries in zip(label_series, image_series):
-                print("to queue")
+                # print("to queue")
                 job = dict()
                 job['lseries'] = lseries
                 job['iseries'] = iseries
@@ -890,7 +890,7 @@ class RoiAligner2:
 
             # Build up job queue
             for lseries, iseries in zip(label_series, image_series):
-                print("to queue")
+                # print("to queue")
                 job = dict()
                 job['lseries'] = lseries
                 job['iseries'] = iseries
@@ -905,7 +905,7 @@ class RoiAligner2:
                 processes.append(p)
                 jobs.put('STOP')
 
-            # print(str(len(label_series)) + " jobs started, " + str(self.n_cpus) + " workers")
+            print(str(len(label_series)) + " jobs started, " + str(self.n_cpus) + " workers")
 
             # Get results and increment counter along with it
             while count < max_jobs:
