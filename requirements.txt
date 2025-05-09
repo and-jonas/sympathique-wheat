@@ -2,7 +2,7 @@ ultralytics
 pillow
 imageio
 matplotlib
-numpy
+numpy==1.26.3
 pandas
 opencv-contrib-python==4.9.0.80
 imutils
@@ -11,3 +11,4 @@ scipy
 imageio
 natsort
 leaf-toolkit
+dill==0.3.8
