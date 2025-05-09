@@ -14,7 +14,7 @@ def run():
     if year == 2024:
         from Processors.RoiAligner import RoiAligner2 as RoiAligner
         roi_aligner = RoiAligner(
-            path_labels=f'data/{year}/*/runs/pose/predict/labels',
+            path_labels=f'data/{year}/*/runs/pose/predict3/labels',
             path_images=f'data/{year}/*',
             path_leaf_masks=None,  # not available at this stage
             path_output='Output',
