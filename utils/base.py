@@ -375,6 +375,30 @@ def make_bbox_overlay(img, pts, box):
     return overlay
 
 
+def make_bbox_overlay_(img, pts, box):
+    """
+    Creates an overlay on the original image that shows the detected marks and the fitted bounding box
+    :param img: original image
+    :param pts: list of coordinate [x,y] pairs denoting the detected mark positions
+    :param box: the box coordinates in cv2 format
+    :return: image with overlay
+    """
+    overlay = copy.copy(img)
+    if type(pts) is tuple:
+        colors = [(0, 0, 255), (255, 0, 0), (0, 255, 0), (255, 255, 0)]
+        for i in range(len(pts)):
+            for point in pts[i]:
+                cv2.circle(overlay, (point[0], point[1]), radius=15, color=colors[i], thickness=9)
+    else:
+        for point in pts:
+            cv2.circle(overlay, (point[0], point[1]), radius=15, color=(0, 0, 255), thickness=9)
+    if box is not None:
+        box_ = np.intp(box)
+        cv2.drawContours(overlay, [box_], 0, (255, 0, 0), 9)
+    overlay = cv2.resize(overlay, (0, 0), fx=0.25, fy=0.25)
+    return overlay
+
+
 def make_inference_crop(pts, img):
     """
     Makes a crop of the full image that contains the leaf to speed up inference
@@ -531,6 +555,50 @@ def find_keypoint_matches(current, current_orig, ref, dist_limit=150):
     return src, dst
 
 
+def find_keypoint_matches_(current, current_orig, ref, dist_limit=150):
+    """
+    Finds pairs of matching detected marks on two subsequent images of a series
+    :param current: the current image to be aligned to the initial image
+    :param current_orig: the initial image of the series
+    :param ref: the coordinates of keypoints in the reference image
+    :param dist_limit: the maximum allowed distance between points to consider them the same point
+    :return: matched pairs of keypoints coordinates in the source and the target
+    """
+
+    # # separate marks according to position
+    # current_sep = separate_marks(pts=current, roi_width=roi_width)
+    # current_orig_sep = separate_marks(pts=current_orig, roi_width=roi_width)
+    # ref_sep = separate_marks(ref, roi_width=roi_width)
+
+    src = []
+    dst = []
+    for c, co, r in zip(current[2:], current_orig[2:], ref[2:]):
+
+        # make and query tree
+        tree = KDTree(c)
+        assoc = []
+        for I1, point in enumerate(r):
+            _, I2 = tree.query(point, k=1, distance_upper_bound=dist_limit)
+            assoc.append((I1, I2))
+
+        # match indices back to key point coordinates
+        assocs = []
+        for a in assoc:
+            p1 = r[a[0]].tolist()
+            try:
+                p2 = co[a[1]].tolist()
+            except IndexError:
+                p2 = [np.NAN, np.NAN]
+            assocs.append([p1, p2])
+
+        # reshape to list of corresponding source and target key point coordinates
+        pair = assocs
+        src.append([[*p[0]] for p in pair if p[1][0] is not np.nan])
+        dst.append([[*p[1]] for p in pair if p[1][0] is not np.nan])
+
+    return src, dst
+
+
 def check_keypoint_matches(src, dst, mdev, tol, m):
     """
     Verifies that the kd-tree identified associations are meaningful by comparing the distance between source and target
@@ -568,6 +636,54 @@ def check_keypoint_matches(src, dst, mdev, tol, m):
             try:
                 src = np.delete(src, outliers, 0)
                 dst = np.delete(dst, outliers, 0)
+            except IndexError:
+                pass
+
+    return src, dst
+
+
+def check_keypoint_matches_(src, dst, mdev, tol, m):
+    """
+    Verifies that the kd-tree identified associations are meaningful by comparing the distance between source and target
+    across the top and bottom rows. Regular patterns are expected, and outliers from this pattern are removed.
+    If no stable pattern is found, all associations are deleted.
+    :param src: source point coordinates
+    :param dst: destination point coordinates
+    :param mdev: average deviation from mean that is tolerated for associations
+    :param tol: value below which matches are kept even if dev is higher than the specified threshold
+    :param m: parameter for outlier removal
+    :return: cleaned lists of source and destination points
+    """
+
+    # unpack
+    src_t, src_b = src
+    src_ = src_t + src_b
+    dst_t, dst_b = dst
+    dst_ = dst_t + dst_b
+
+    if len(src_) < 7:
+        src, dst = [], []
+    else:
+        # broadly check for a regular pattern, if none is found delete all associations
+        distances = pairwise_distances(src_, dst_)
+        d = np.abs(distances - np.mean(distances))
+        m_dev = np.mean(d)
+        if mdev is not None and m_dev > mdev:
+            src, dst = [], []
+        else:
+            # otherwise, separately evaluate pairwise distances for top and bottom marks
+            # eliminate outliers from both, source and target, if any found
+            for type in [src, dst]:
+                t, b = type
+                t_distances = distances[:len(t)]
+                b_distances = distances[len(t):]
+                outliers_t = reject_outliers(data=t_distances, tol=tol, m=m)
+                outliers_b = reject_outliers(data=b_distances, tol=tol, m=m)
+            try:
+                src[0] = np.delete(src[0], outliers_t, 0).tolist()
+                src[1] = np.delete(src[1], outliers_b, 0).tolist()
+                dst[0] = np.delete(dst[0], outliers_t, 0).tolist()
+                dst[1] = np.delete(dst[1], outliers_b, 0).tolist()
             except IndexError:
                 pass
 

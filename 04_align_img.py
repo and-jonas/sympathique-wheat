@@ -6,7 +6,7 @@
 # ======================================================================================================================
 
 # Define the year (marking strategy used)
-year = 2023
+year = 2024
 
 def run():
     if year == 2024:
@@ -14,8 +14,8 @@ def run():
         roi_aligner = RoiAligner(
             path_labels=f'data/{year}/*/runs/pose/predict/labels',
             path_images=f'data/{year}/*',
-            path_leaf_masks=None,  # not available at this stage
-            path_output='Output2',
+            path_leaf_masks=f'Output/*/predictions/symptoms_seg/pred',
+            path_output='Output',
             n_cpus=1
     )
     elif year == 2023:
@@ -23,8 +23,8 @@ def run():
         roi_aligner = RoiAligner(
             path_labels=f'data/{year}/*/runs/pose/predict/labels',
             path_images=f'data/{year}/*',
-            path_output='Output2',
-            n_cpus=6
+            path_output='Output',
+            n_cpus=1
         )
     roi_aligner.process_all()
 
