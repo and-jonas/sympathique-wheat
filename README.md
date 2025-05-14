@@ -20,8 +20,8 @@ All the necessary libraries and their dependencies can be installed with `conda 
 
 ## Data
 Data sets are available via the ETH Zürich publications and research data repository:
-(https://doi.org/10.3929/ethz-b-000735497)
+https://doi.org/10.3929/ethz-b-000735497
 
 ## Models
 The trained reference mark detection model can be downloaded from the following link: 
-(https://doi.org/10.3929/ethz-b-000735497)
+https://doi.org/10.3929/ethz-b-000735497
