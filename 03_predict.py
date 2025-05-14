@@ -16,4 +16,5 @@ dirs_to_process = glob.glob('Output/ESWW*')
 
 # loop over directories
 for d in dirs_to_process:
+    print(d)
     pred.predict(images_src=f'{d}/crop', export_dst=f'{d}/predictions')

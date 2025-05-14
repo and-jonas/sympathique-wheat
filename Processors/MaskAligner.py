@@ -17,19 +17,24 @@ import json
 import utils.base as base_utils
 
 
-def transform_mask(base_dir, path_to_mask, n_classes, kpt_cls):
+def transform_mask(base_dir, path_to_seg_mask, path_to_det_mask, n_classes, kpt_cls):
 
-    print(path_to_mask)
+    print(path_to_seg_mask)
 
     # get names
-    base_name = os.path.basename(path_to_mask)
+    base_name = os.path.basename(path_to_seg_mask)
     jpg_name = base_name.replace(".png", ".JPG")
     stem_name = base_name.replace(".png", "")
     leaf_name = "_".join(stem_name.split("_")[2:4])
 
-    # get mask
-    mask = Image.open(path_to_mask)
-    mask = np.asarray(mask)
+    # get masks
+    seg_mask = Image.open(path_to_seg_mask)
+    seg_mask = np.asarray(seg_mask)
+    det_mask = Image.open(path_to_det_mask)
+    det_mask = np.asarray(det_mask)
+
+    # combine masks
+    mask = np.where(det_mask == 0, seg_mask, det_mask)
 
     # get image
     image = f'{base_dir}/{leaf_name}/crop/{jpg_name}'

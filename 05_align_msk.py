@@ -13,30 +13,32 @@ import os
 import multiprocessing
 
 
-if __name__ == '__main__':
+# if __name__ == '__main__':
 
-    # find all masks
-    base_dir = 'Output'
-    masks = glob.glob(f'{base_dir}/*/mask/*.png')
+# find all masks
+base_dir = 'Output'
+masks_seg = glob.glob(f'{base_dir}/*/predictions/symptoms_seg/pred/*.png')
+masks_det = glob.glob(f'{base_dir}/*/predictions/symptoms_det/pred/*.png')
 
-    # list all samples for which the transformation was successful
-    existing_output = glob.glob(f'{base_dir}/*/result/piecewise/*.JPG')
-    b_names = [os.path.basename(x).replace(".JPG", "") for x in existing_output]
+# list all samples for which the transformation was successful
+existing_output = glob.glob(f'{base_dir}/*/result/piecewise/*.JPG')
+b_names = [os.path.basename(x).replace(".JPG", "") for x in existing_output]
 
-    # list all that can be processed
-    masks = [m for m in masks if os.path.basename(m).replace(".png", "") in b_names]
+# list all that can be processed
+masks_seg = [m for m in masks_seg if os.path.basename(m).replace(".png", "") in b_names]
+masks_det = [m for m in masks_det if os.path.basename(m).replace(".png", "") in b_names]
 
-    # get number of samples to process
-    n = len(masks)
+# get number of samples to process
+n = len(masks_seg)
 
-    # list tasks
-    base_dir = [base_dir] * n
-    n_classes = [6] * n
-    kpt_cls = [(5, 6)] * n
-    tasks = [*zip(base_dir, masks, n_classes, kpt_cls)]
+# list tasks
+base_dir = [base_dir] * n
+n_classes = [6] * n
+kpt_cls = [(5, 6)] * n
+tasks = [*zip(base_dir, masks_seg, masks_det, n_classes, kpt_cls)]
 
-    # transform masks
-    num_processes = 5
-    with multiprocessing.Pool(processes=num_processes) as pool:
-        pool.starmap(transform_mask, tasks)
+# transform masks
+num_processes = 1
+with multiprocessing.Pool(processes=num_processes) as pool:
+    pool.starmap(transform_mask, tasks)
 
