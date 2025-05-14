@@ -19,22 +19,37 @@ from scipy.spatial.distance import cdist
 from scipy import ndimage as ndi
 from multiprocessing import Manager, Process
 from matplotlib import path
+import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 
 class SymptomTracker:
 
-    def __init__(self, path_aligned_masks,  path_images, path_kpts, path_output, n_cpus):
+    def __init__(self, path_aligned_masks,  path_images, path_kpts, path_output, n_cpus, indices=None):
         self.path_aligned_masks = Path(path_aligned_masks)
         self.path_images = Path(path_images)
         self.path_kpts = Path(path_kpts)
         self.path_output = Path(path_output)
         self.n_cpus = n_cpus
+        self.indices = indices
 
     def prepare_workspace(self):
         """
         Creates all required output directories
         """
         self.path_output.mkdir(parents=True, exist_ok=True)
+        with open(f"{self.path_output}/failed_samples.txt", 'w') as file:
+            pass
+
+    def log_fail(self, image_id):
+        """
+        Writes the image id of failure casees to a txt file
+        :param image_id: if of the current image
+        :param type: the type of transformation attempted ("piecewise" of "projective")
+        """
+        f = open(f"{self.path_output}/failed_samples.txt", 'a')
+        f.writelines(image_id + "\n")
+        f.close()
 
     def create_output_dirs(self, series_id):
         """
@@ -45,12 +60,15 @@ class SymptomTracker:
         init_m_path = sample_output_path / "init_mask"
         m_checker_path = sample_output_path / "mask"
         o_checker_path = sample_output_path / "overlay"
+        pycn_density_map = sample_output_path / "pycn_density_mask"
+        pycn_distance_map = sample_output_path / "pycn_distance_mask"
         lesion_data_path = sample_output_path / "lesion_data"
         leaf_data_path = sample_output_path / "leaf_data"
         leaf_mask = sample_output_path / "leaf_mask"
-        for p in (m_checker_path, o_checker_path, lesion_data_path, leaf_data_path, init_m_path, leaf_mask):
+        for p in (m_checker_path, o_checker_path, lesion_data_path, leaf_data_path, init_m_path, leaf_mask,
+                  pycn_distance_map, pycn_density_map):
             p.mkdir(parents=True, exist_ok=True)
-        return m_checker_path, o_checker_path, lesion_data_path, leaf_data_path, init_m_path, leaf_mask
+        return m_checker_path, o_checker_path, lesion_data_path, leaf_data_path, init_m_path, leaf_mask, pycn_distance_map, pycn_density_map
 
     def get_series(self):
         """
@@ -72,7 +90,7 @@ class SymptomTracker:
         #     # warnings.warn("list of images and list of coordinate files are not of equal length."
         #     #               "Ignoring extra coordinate files.")
 
-        print("found " + str(len(uniques)) + " unique sample names")
+        print("-- found " + str(len(uniques)) + " unique sample names")
 
         for unique_sample in uniques:
             image_idx = [index for index, image_id in enumerate(image_image_id) if unique_sample == image_id]
@@ -85,7 +103,15 @@ class SymptomTracker:
             mask_series.append(sample_masks)
             image_series.append(sample_image_names)
 
-        return mask_series, image_series
+
+        if self.indices:
+            start, end = self.indices
+            m, i = mask_series[start:end], image_series[start:end]
+        else:
+            m, i = mask_series, image_series
+        print("-- processing " + str(len(m)) + " series")
+
+        return m, i
 
     def process_series(self, work_queue, result):
         """
@@ -101,7 +127,7 @@ class SymptomTracker:
             # generate output directories for each series
             series_id = "_".join(os.path.basename(m_series[0]).split("_")[2:4]).replace(".png", "")
 
-            print("processing " + series_id)
+            # print("processing " + series_id)
 
             out_paths = self.create_output_dirs(series_id=series_id)
 
@@ -111,16 +137,20 @@ class SymptomTracker:
             all_objects = {}
             num_frames = len(m_series)
 
-            # Process each frame in the time series
+            # Process each frame in the time seriesr
             for frame_number in range(1, num_frames + 1):
 
-                print("--" + str(frame_number))
+                # try:
+
+                # print("--" + str(frame_number))
 
                 # get sample identifiers
                 png_name = os.path.basename(m_series[frame_number - 1])
                 data_name = png_name.replace(".png", ".txt")
                 sample_name = png_name.replace(".png", "")
                 txt_name = sample_name + '.txt'
+
+                print(data_name)
 
                 # ==================================================================================================================
                 # 1. Pre-processing
@@ -180,7 +210,7 @@ class SymptomTracker:
 
                 # reduce to roi delimited by the key points
                 leaf_checker = mask_leaf * leaf_mask
-                # cv2.imwrite(f'{out_paths[5]}/{png_name}', leaf_checker)
+                cv2.imwrite(f'{out_paths[5]}/{png_name}', leaf_checker)
 
                 # ==================================================================================================================
                 # 3. Watershed segmentation for object separation
@@ -236,11 +266,11 @@ class SymptomTracker:
                                                                         lag_x:lag_x + lag_w]
 
                 # check size again
-                seg = base_utils.filter_objects_size(mask=seg, size_th=50, dir="smaller")
+                seg = base_utils.filter_objects_size(mask=seg, size_th=1000, dir="smaller")
 
                 # generate complete watershed markers
                 _, markers, _, _ = cv2.connectedComponentsWithStats(seg, connectivity=8)
-                # cv2.imwrite(f'{out_paths[4]}/{png_name}', seg)
+                cv2.imwrite(f'{out_paths[4]}/{png_name}', seg)
 
                 # ==================================================================================================================
                 # 4. Analyze each lesion: label and extract data
@@ -259,10 +289,22 @@ class SymptomTracker:
                 lesion_data = []
 
                 # prepare distance map
-                # slow operation, therefore perform once for the entire inverted mask
                 mask_invert = np.bitwise_not(seg)
                 distance_invert = ndi.distance_transform_edt(mask_invert)
 
+                # for pycnidiation monitoring
+                image_with_pycn = copy.copy(img)
+
+                # prepare pycnidia density map
+                pycn_distmap, pycn_dmap = base_utils.get_pycnidia_maps(
+                    mask=frame_,
+                    resize_factor=5, bandwidth=25, kernel='gaussian'
+                )
+                plt.imsave(f'{out_paths[6]}/{png_name}', pycn_distmap)
+                plt.imsave(f'{out_paths[7]}/{png_name}', pycn_dmap)
+
+                # if frame_number == 11:
+                #     print("stop")
                 for idx, contour in enumerate(contours):
 
                     # print("----" + str(idx))
@@ -299,7 +341,7 @@ class SymptomTracker:
 
                         # if overlaps, then it is not a new lesion but an already tracked one
                         # --> add corresponding label and terminate search
-                        if contour_overlap >= 0.2:  # <==CRITICAL=======================================================
+                        if contour_overlap >= 0.2:  # <== CRITICAL =================================================
                             is_new_object = False
                             object_matches[lag_label] = (x, y, w, h)
                             current_label = lag_label  # Update the label to the existing object's label
@@ -315,12 +357,11 @@ class SymptomTracker:
                     rect = lesion_utils.get_bounding_boxes(rect=rect)
 
                     # extract roi
-                    empty_mask_all, empty_img, ctr_obj = lesion_utils.select_roi(rect=rect, img=img, mask=seg)
+                    _, empty_img, _ = lesion_utils.select_roi(rect=rect, img=img, mask=seg)
 
                     # extract RGB profile, checker image, spline normals, and spline base points
-                    prof, out_checker, spl, spl_points = lesion_utils.spline_contours(
+                    _, out_checker, spl, spl_points, cols = lesion_utils.spline_contours(
                         mask_obj=roi,
-                        mask_all=empty_mask_all,
                         mask_leaf=leaf_checker,
                         img=empty_img,
                         checker=checker,
@@ -329,11 +370,24 @@ class SymptomTracker:
 
                     # extract lesion data
                     if len(spl[0]) != 0 and in_leaf_checker != 0:
+
                         # extract perimeter lengths
                         analyzable_perimeter = len(spl[1]) / len(spl[0])
                         occluded_perimeter = len(spl[2]) / len(spl[0])
-                        # edge_perimeter = len(spl[3]) / len(spl[0])
-                        # neigh_perimeter = len(spl[2]) / len(spl[0])
+
+                        # Calculate total distance in x and y directions
+                        total_x_distance = np.sum(np.abs(np.diff(spl_points[0])))
+                        total_y_distance = np.sum(np.abs(np.diff(spl_points[1])))
+
+                        # calculate expandable distance in x and y directions
+                        remove_idx = np.unique(cols)
+                        if len(remove_idx) != 0:
+                            r_idxs = base_utils.split_consecutive_sets(remove_idx)
+                            dx = sum(np.sum(np.abs(np.diff(spl_points[0][i]))) for i in r_idxs)
+                            dy = sum(np.sum(np.abs(np.diff(spl_points[1][i]))) for i in r_idxs)
+                        else:
+                            dx = 0
+                            dy = 0
 
                         # extract other lesion properties
                         # these are extracted from the original (un-smoothed) contour
@@ -349,32 +403,55 @@ class SymptomTracker:
                         n_pycn = len(np.where(pycn_mask == 212)[0])
                         pycn_density_lesion = n_pycn / contour_area
 
+                        # extract rust number
+                        rust_mask = np.where(roi, frame_, 0)
+                        n_rust = len(np.where(rust_mask == 255)[0])
+                        rust_density_lesion = n_rust / contour_area
+
+                        pycn_features, pycn_contour = base_utils.get_pycn_features(
+                            mask=frame_,
+                            lesion_mask=roi,
+                            contour=contour,
+                            max_dist=50, bandwidth=25, kernel='gaussian'
+                        )
+
                         # collect output data
-                        lesion_data.append({'label': current_label,
-                                            'area': contour_area,
-                                            'perimeter': contour_perimeter,
-                                            'solidity': contour_solidity,
-                                            'analyzable_perimeter': analyzable_perimeter,
-                                            'occluded_perimeter': occluded_perimeter,
-                                            # 'edge_perimeter': edge_perimeter,
-                                            # 'neigh_perimeter': neigh_perimeter,
-                                            'max_width': w,
-                                            'max_height': h,
-                                            'n_pycn': n_pycn,
-                                            'pycn_density': pycn_density_lesion})
+                        ldat = {'label': current_label,
+                                'area': contour_area,
+                                'perimeter': contour_perimeter,
+                                'solidity': contour_solidity,
+                                'analyzable_perimeter': analyzable_perimeter,
+                                'occluded_perimeter': occluded_perimeter,
+                                'x_perimeter': total_x_distance,
+                                'y_perimeter': total_y_distance,
+                                'x_perimeter_n': dx,
+                                'y_perimeter_n': dy,
+                                'max_width': w,
+                                'max_height': h,
+                                'n_pycn': n_pycn,
+                                'pycn_density_lesion': pycn_density_lesion,
+                                'rust_density_lesion': rust_density_lesion
+                                }
                     else:
-                        lesion_data.append({'label': current_label,
-                                            'area': np.nan,
-                                            'perimeter': np.nan,
-                                            'solidity': np.nan,
-                                            'analyzable_perimeter': np.nan,
-                                            'occluded_perimeter': occluded_perimeter,
-                                            # 'edge_perimeter': np.nan,
-                                            # 'neigh_perimeter': np.nan,
-                                            'max_width': np.nan,
-                                            'max_height': np.nan,
-                                            'n_pycn': np.nan,
-                                            'pycn_density': np.nan})
+                        keys = ['area', 'perimeter', 'solidity', 'analyzable_perimeter',
+                                'occluded_perimeter', 'x_perimeter', 'y_perimeter',
+                                'x_perimeter_n', 'y_perimeter_n', 'max_width', 'max_height',
+                                'n_pycn', 'pycn_density_lesion', 'rust_density_lesion']
+                        ldat = ldat | {'label': current_label} | {key: np.nan for key in keys}
+
+                    # draw pycnidiation contour
+                    if pycn_contour is not None:
+                        for p in pycn_contour:
+                            cv2.drawContours(image_with_pycn, p, -1, (255, 255, 0), 2)
+                    cv2.drawContours(image_with_pycn, contour, -1, (0, 0, 0), 2)
+
+                    # data
+                    ldat = ldat | pycn_features
+                    lesion_data.append(ldat)
+
+                # except:
+                #     self.log_fail(sample_name)
+                #     continue
 
                 # Update the labels with the new matches
                 labels = object_matches
@@ -387,7 +464,7 @@ class SymptomTracker:
                 # summary stats
                 la_tot = (frame_.shape[0] * frame_.shape[1]) - len(
                     np.where(frame_ == 0)[0])  # roi area - background pixels
-                la_damaged = len(np.where((frame_ != 0) & (frame_ != 51))[0])
+                la_damaged = len(np.where((frame_ != 0) & (frame_ != 42))[0])
                 la_healthy = len(np.where(frame_ == 42)[0])
                 la_damaged_f = la_damaged / la_tot
                 la_healthy_f = la_healthy / la_tot
@@ -409,12 +486,17 @@ class SymptomTracker:
                 std_dist = np.nanstd(out)
                 cv_dist = std_dist / mean_dist
                 n_comps, output, stats, centroids = cv2.connectedComponentsWithStats(seg, connectivity=8)
-                distance = cdist(centroids[1:], centroids[1:], metric='euclidean')
-                np.fill_diagonal(distance, np.nan)
-                shortest_dist = np.nanmin(distance, axis=1)
-                mean_shortest_dist = np.mean(shortest_dist)
-                std_shortest_dist = np.std(shortest_dist)
-                cv_shortest_dist = std_shortest_dist / mean_shortest_dist
+                if n_comps > 2:
+                    distance = cdist(centroids[1:], centroids[1:], metric='euclidean')
+                    np.fill_diagonal(distance, np.nan)
+                    shortest_dist = np.nanmin(distance, axis=1)
+                    mean_shortest_dist = np.mean(shortest_dist)
+                    std_shortest_dist = np.std(shortest_dist)
+                    cv_shortest_dist = std_shortest_dist / mean_shortest_dist
+                else:
+                    mean_shortest_dist = np.nan
+                    std_shortest_dist = np.nan
+                    cv_shortest_dist = np.nan
 
                 # grab data
                 leaf_data = [
@@ -457,7 +539,6 @@ class SymptomTracker:
                 # Draw and save the labeled objects on the frame
                 frame_with_labels = cv2.cvtColor(seg, cv2.COLOR_GRAY2BGR)
                 image_with_labels = copy.copy(out_checker)
-                image_with_pycn = copy.copy(img)
                 for label, (x, y, w, h) in labels.items():
                     cv2.rectangle(frame_with_labels, (x, y), (x + w, y + h), (0, 255, 0), 2)
                     cv2.putText(frame_with_labels, str(label), (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
@@ -473,12 +554,14 @@ class SymptomTracker:
                     # Draw circles at the specified coordinates
                     for x, y in zip(p_y_coords, p_x_coords):
                         cv2.circle(image_with_pycn, (y, x), 5, (255, 0, 0), 1)
+                        cv2.circle(image_with_labels, (y, x), 5, (0, 0, 255), 1)
                 except IndexError:
                     pass
                 try:
                     r_y_coords, r_x_coords = rust_point_list[:, 1], rust_point_list[:, 0]
                     for x, y in zip(r_y_coords, r_x_coords):
                         cv2.circle(image_with_pycn, (y, x), 5, (0, 255, 0), 1)
+                        cv2.circle(image_with_labels, (y, x), 5, (0, 0, 255), 1)
                 except IndexError:
                     pass
 
@@ -505,30 +588,28 @@ class SymptomTracker:
             count = 0
 
             # Build up job queue
-            for mseries, iseries in zip(mask_series, image_series):
-                print("to queue")
-                job = dict()
-                job['mseries'] = mseries
-                job['iseries'] = iseries
-                jobs.put(job)
+            with tqdm(total=len(mask_series), desc="Processing jobs") as pbar:
+                for mseries, iseries in zip(mask_series, image_series):
+                    job = dict()
+                    job['mseries'] = mseries
+                    job['iseries'] = iseries
+                    jobs.put(job)
 
-            # Start processes
-            for w in range(self.n_cpus):
-                p = Process(target=self.process_series,
-                            args=(jobs, results))
-                p.daemon = True
-                p.start()
-                processes.append(p)
-                jobs.put('STOP')
+                # Start processes
+                for w in range(self.n_cpus):
+                    p = Process(target=self.process_series,
+                                args=(jobs, results))
+                    p.daemon = True
+                    p.start()
+                    processes.append(p)
+                    jobs.put('STOP')
 
-            print(str(len(mask_series)) + " jobs started, " + str(self.n_cpus) + " workers")
+                print(str(len(mask_series)) + " jobs started, " + str(self.n_cpus) + " workers")
 
-            # Get results and increment counter along with it
-            while count < max_jobs:
-                series_name = results.get()
-                count += 1
-                print("processed " + str(count) + "/" + str(max_jobs) + ": " + str(series_name))
+                # Get results and increment counter along with it
+                while count < max_jobs:
+                    count += 1
+                    pbar.update(1)
 
-            for p in processes:
-                p.join()
-                print(f"Process {series_name} finished.")
+                for p in processes:
+                    p.join()

@@ -14,6 +14,9 @@ import skimage
 from scipy import ndimage
 from PIL import Image
 import copy
+from matplotlib.colors import Normalize
+import matplotlib.pyplot as plt
+from sklearn.neighbors import KernelDensity
 
 
 def make_point_list_(input):
@@ -357,6 +360,7 @@ def remove_double_detections(x, y, tol):
     return point_list, x, y
 
 
+# version for RoiAligner
 def make_bbox_overlay(img, pts, box):
     """
     Creates an overlay on the original image that shows the detected marks and the fitted bounding box
@@ -375,6 +379,7 @@ def make_bbox_overlay(img, pts, box):
     return overlay
 
 
+# version for RoiAligner2
 def make_bbox_overlay_(img, pts, box):
     """
     Creates an overlay on the original image that shows the detected marks and the fitted bounding box
@@ -520,6 +525,7 @@ def rotate_translate_warp_points(mask, classes, rot, box, tf, target_shape, warp
     return warped
 
 
+# version for RoiAligner
 def find_keypoint_matches(current, current_orig, ref, dist_limit=150):
     """
     Finds pairs of matching detected marks on two subsequent images of a series
@@ -555,6 +561,7 @@ def find_keypoint_matches(current, current_orig, ref, dist_limit=150):
     return src, dst
 
 
+# version for RoiAligner2
 def find_keypoint_matches_(current, current_orig, ref, dist_limit=150):
     """
     Finds pairs of matching detected marks on two subsequent images of a series
@@ -599,6 +606,7 @@ def find_keypoint_matches_(current, current_orig, ref, dist_limit=150):
     return src, dst
 
 
+# version for RoiAligner
 def check_keypoint_matches(src, dst, mdev, tol, m):
     """
     Verifies that the kd-tree identified associations are meaningful by comparing the distance between source and target
@@ -642,6 +650,7 @@ def check_keypoint_matches(src, dst, mdev, tol, m):
     return src, dst
 
 
+# version for RoiAligner2
 def check_keypoint_matches_(src, dst, mdev, tol, m):
     """
     Verifies that the kd-tree identified associations are meaningful by comparing the distance between source and target
@@ -883,6 +892,20 @@ def is_multi_channel_img(img):
         return False
 
 
+def split_consecutive_sets(numbers):
+    sets = []
+    current_set = [numbers[0]]  # Start the first set with the first number
+
+    for i in range(1, len(numbers)):
+        if numbers[i] - numbers[i - 1] > 1:  # Check for a gap
+            sets.append(current_set)  # Save the current set
+            current_set = []  # Start a new set
+        current_set.append(numbers[i])
+
+    sets.append(current_set)  # Add the last set
+    return sets
+
+
 def rectangles_overlap(rect1, rect2):
     """
     Determines if two bboxes overlap
@@ -929,3 +952,173 @@ def process_leaf_mask(path_leaf_mask):
     m = cv2.resize(m, (0, 0), fx=4, fy=4, interpolation=cv2.INTER_NEAREST)
 
     return m
+
+
+def get_pycnidia_maps(mask, resize_factor, bandwidth, kernel):
+
+    # binarize pycnidia, multiply with lesion mask
+    pycnidia_binary = np.uint8(np.where(mask == 212, 1, 0))
+
+    # get pycnidia coordinates
+    coordinates = np.where(pycnidia_binary == 1)
+    coordinates = list(zip(coordinates[0], coordinates[1]))
+
+    if not len(coordinates) > 0:
+
+        color_image_distance = np.zeros_like(mask)
+        color_image_density = np.zeros_like(mask)
+
+    else:
+
+        dmap = ndimage.distance_transform_edt(1 - pycnidia_binary)
+        # dmap = np.where(dmap > 255, 255, dmap)
+
+        # Normalize the distance map to the range [0, 1]
+        norm = Normalize(vmin=dmap.min(), vmax=dmap.max())
+        normalized_dmap = norm(dmap)
+
+        # Map the normalized distance map to a colormap
+        colormap = plt.cm.viridis  # Change to another colormap if preferred
+        color_image_distance = colormap(normalized_dmap)
+
+        # get kernel density esimate
+        kde = KernelDensity(bandwidth=bandwidth, kernel=kernel)
+        kde.fit(coordinates)
+
+        # get lesion mask
+        lesion_mask = remove_points_from_mask(mask=mask, classes=(212, 255))
+        lesion_mask = np.where(lesion_mask == 85, 1, 0)
+        lesion_mask = np.uint8(lesion_mask * 255)
+
+        # resize for faster processing
+        height = int(lesion_mask.shape[0] / resize_factor)
+        width = int(lesion_mask.shape[1] / resize_factor)
+        x = np.linspace(0, lesion_mask.shape[1] - 1, width)  # Match resized grid
+        y = np.linspace(0, lesion_mask.shape[0] - 1, height)
+        x, y = np.meshgrid(x, y)
+        grid_coords = np.vstack([y.ravel(), x.ravel()]).T  # Note: (y, x) for consistency
+
+        # Evaluate KDE on the grid
+        log_density = kde.score_samples(grid_coords)
+        density = np.exp(log_density).reshape(height, width)
+        density *= len(coordinates)  # Scale density by the total number of points
+        density_rsz = cv2.resize(density, (mask.shape[1], mask.shape[0]), interpolation=cv2.INTER_NEAREST)
+        norm = Normalize(vmin=0, vmax=0.004) # max density value was 0.398 across entire data set, but different dist
+        normalized_density = norm(density_rsz)
+
+        # Map the normalized density to a colormap
+        colormap = plt.cm.plasma
+        color_image = colormap(normalized_density)
+
+        # Remove the alpha channel and scale to 0-255 for saving
+        color_image_density = (color_image[:, :, :3] * 255).astype(np.uint8)
+
+    return color_image_distance, color_image_density
+
+
+def get_pycn_features(mask, lesion_mask, contour, max_dist, bandwidth, kernel):
+
+    # fig, axs = plt.subplots(1, 2, sharex=True, sharey=True)
+    # axs[0].imshow(lesion_binary)
+    # axs[0].set_title('mask')
+    # axs[1].imshow(mask)
+    # axs[1].set_title('density')
+    # plt.show(block=True)
+
+    # binarize pycnidia, multiply with lesion mask
+    pycnidia_binary = np.uint8(np.where(mask == 212, 1, 0) * lesion_mask / 255)
+
+    # pycnidia coordinates
+    coords = np.where(pycnidia_binary == 1)
+    coords = np.array(list(zip(coords[0], coords[1])))
+
+    if len(coords) == 0:
+        keys = ["frac_pycn", "mean_dist", "variance_dist", "min_dist", "max_dist", "median_dist",
+                "mean_l_density", "variance_l_density", "min_l_density", "max_l_density", "median_l_density",
+                "mean_p_density", "variance_p_density", "min_p_density", "max_p_density", "median_p_density"]
+        return {key: np.nan for key in keys}, None
+    else:
+
+        # (1) DISTANCE
+        # get contour distance values
+        dmap = ndimage.distance_transform_edt(1 - pycnidia_binary)
+        contour_points = contour[:, 0, :]
+        dists = []
+        for point in contour_points:
+            x, y = np.round(point).astype(int)
+            if 0 <= x < dmap.shape[1] and 0 <= y < dmap.shape[0]:  # Ensure within bounds
+                dists.append(dmap[y, x])
+        dists = np.asarray(dists)
+
+        # get distance features
+        pycn_contour = np.where(dists <= max_dist)[0]
+        dist_array = np.array(dists)
+        distance_features = {
+            "frac_pycn": len(pycn_contour) / len(contour),
+            "mean_dist": np.mean(dist_array),
+            "variance_dist": np.var(dist_array),
+            "min_dist": np.min(dist_array),
+            "max_dist": np.max(dist_array),
+            "median_dist": np.median(dist_array)
+        }
+
+        # get pycnidiation area as defined by maximum distance from most nearby pycnidium
+        binary_mask = lesion_mask.astype(bool)
+        dmap_lesion = dmap * binary_mask
+        pycnidian_mask_distance_based = np.where(dmap_lesion < max_dist, 1, 0)
+        pycnidian_mask_distance_based = pycnidian_mask_distance_based * lesion_mask
+        pycn_contour_distance_based, _ = cv2.findContours(np.uint8(pycnidian_mask_distance_based * 255), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+
+        # plt.imshow(pycnidian_mask_distance_based)
+        # plt.show()
+
+        # (2) DENSITY
+        # get kernel density estimate
+        kde = KernelDensity(bandwidth=bandwidth, kernel=kernel)
+        kde.fit(coords)
+
+        # resize for faster processing
+        height = int(lesion_mask.shape[0] / 5)
+        width = int(lesion_mask.shape[1] / 5)
+        x = np.linspace(0, lesion_mask.shape[1] - 1, width)  # Match resized grid
+        y = np.linspace(0, lesion_mask.shape[0] - 1, height)
+        x, y = np.meshgrid(x, y)
+        grid_coords = np.vstack([y.ravel(), x.ravel()]).T  # Note: (y, x) for consistency
+
+        # Evaluate KDE on the grid
+        log_density = kde.score_samples(grid_coords)
+        density = np.exp(log_density).reshape(height, width)
+        density *= len(coords)  # Scale density by the total number of points
+        density_rsz = cv2.resize(density, (mask.shape[1], mask.shape[0]), interpolation=cv2.INTER_NEAREST)
+
+        # mask everything except lesion
+        binary_mask = lesion_mask.astype(bool)
+        density_array = density_rsz[binary_mask]
+
+        # get density features
+        lesion_density_features = {
+            "mean_l_density": np.mean(density_array),
+            "variance_l_density": np.var(density_array),
+            "min_l_density": np.min(density_array),
+            "max_l_density": np.max(density_array),
+            "median_l_density": np.median(density_array)
+        }
+
+        # get a pycnidiation density contour
+        pycnidiation_mask = pycnidian_mask_distance_based
+        lesion_pycn_mask = np.logical_and(lesion_mask, pycnidiation_mask)
+        binary_mask = lesion_pycn_mask.astype(bool)
+        density_array = density_rsz[binary_mask]
+
+        # get density features
+        pycnidiation_density_features = {
+            "mean_p_density": np.mean(density_array),
+            "variance_p_density": np.var(density_array),
+            "min_p_density": np.min(density_array),
+            "max_p_density": np.max(density_array),
+            "median_p_density": np.median(density_array)
+        }
+
+        features = distance_features | lesion_density_features | pycnidiation_density_features
+
+    return features, pycn_contour_distance_based

@@ -1,5 +1,6 @@
 from leaf import models
 from leaf.inference import Predictor
+from leaf.visualization import FlattenedVisualizer
 
 import glob
 
@@ -15,6 +16,9 @@ pred = Predictor(config_name='flattened_leaves',
 dirs_to_process = glob.glob('Output/ESWW*')
 
 # loop over directories
+# predict and visualize
 for d in dirs_to_process:
     print(d)
-    pred.predict(images_src=f'{d}/crop', export_dst=f'{d}/predictions')
+    # pred.predict(images_src=f'{d}/crop', export_dst=f'{d}/predictions')
+    vis = FlattenedVisualizer(src_root=f'{d}/predictions', rgb_root=f'{d}/crop', export_root=f'{d}/predictions')
+    vis.visualize()

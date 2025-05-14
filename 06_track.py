@@ -15,7 +15,7 @@ def run():
         path_images='Output/*/result/piecewise',
         path_kpts='Output/*/keypoints',
         path_output='Output/ts',
-        n_cpus=6,
+        n_cpus=1,
     )
     symptom_tracker.process_all()
 

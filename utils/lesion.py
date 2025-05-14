@@ -131,7 +131,7 @@ def check_color_profiles(color_profiles, dist_profiles_outer, leaf_profiles, spl
     spl_n_red_length = [i for j, i in enumerate(spline_normals) if j in np.unique(cols)]
     checked_cprof = np.delete(color_profiles, cols, 1)
 
-    return checked_cprof, spl_n_full_length, spl_n_red_length
+    return checked_cprof, spl_n_full_length, spl_n_red_length, cols
 
 
 def get_spline_normals(spline_points, length_in=0, length_out=15):
@@ -284,12 +284,11 @@ def spline_approx_contour(contour, sf=0.25):
     return x_new, y_new
 
 
-def spline_contours(mask_obj, mask_all, mask_leaf, img, checker, distance_invert):
+def spline_contours(mask_obj, mask_leaf, img, checker, distance_invert):
     """
     Wrapper function for processing of contours via spline normals
     :param mask_leaf: a binary mask with 255 for leaf and 0 for background
     :param mask_obj: a binary mask containing only the lesion of interest.
-    :param mask_all: a binary mask containing all the segmented objects in the patch
     :param img: the original patch image
     :param checker: A copy of the (full) image to process.
     :return: cleaned color profiles from contour normals in cv2 format, an image for evaluation
@@ -320,7 +319,7 @@ def spline_contours(mask_obj, mask_all, mask_leaf, img, checker, distance_invert
         leaf_profiles = extract_normals_pixel_values(img=mask_leaf, normals=spl_n)
 
         # remove normals that extend into lesion
-        final_profiles, spl_n_full, spl_n_red = check_color_profiles(
+        final_profiles, spl_n_full, spl_n_red, cols = check_color_profiles(
             color_profiles=color_profiles,
             dist_profiles_outer=dist_profiles_outer,
             leaf_profiles=leaf_profiles,
@@ -328,6 +327,7 @@ def spline_contours(mask_obj, mask_all, mask_leaf, img, checker, distance_invert
         )
 
     else:
+        cols = []
         spl_n = []
         sm_contour = []
         final_profiles, spl_n_full, spl_n_red, = None, [], []
@@ -345,7 +345,7 @@ def spline_contours(mask_obj, mask_all, mask_leaf, img, checker, distance_invert
         for c in [sm_contour]:
             cv2.drawContours(checker, c, -1, (0, 0, 255), 1)
 
-    return final_profiles, checker, (spl_n, spl_n_full, spl_n_red), spline_points
+    return final_profiles, checker, (spl_n, spl_n_full, spl_n_red), spline_points, cols
 
 
 def get_object_watershed_labels(current_mask, markers):

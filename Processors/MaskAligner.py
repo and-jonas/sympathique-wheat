@@ -32,6 +32,10 @@ def transform_mask(base_dir, path_to_seg_mask, path_to_det_mask, n_classes, kpt_
     seg_mask = np.asarray(seg_mask)
     det_mask = Image.open(path_to_det_mask)
     det_mask = np.asarray(det_mask)
+    
+    # pycnidia and rust pustules are denoted as 1 and 2
+    # to combine, change to 5 and 6
+    det_mask = np.where(det_mask == 0, det_mask, det_mask + 4)
 
     # combine masks
     mask = np.where(det_mask == 0, seg_mask, det_mask)

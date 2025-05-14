@@ -7,6 +7,7 @@ pandas
 opencv-contrib-python==4.9.0.80
 imutils
 scikit-image
+scikit-learn
 scipy
 imageio
 natsort
