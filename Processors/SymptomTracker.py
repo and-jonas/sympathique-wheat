@@ -65,10 +65,11 @@ class SymptomTracker:
         lesion_data_path = sample_output_path / "lesion_data"
         leaf_data_path = sample_output_path / "leaf_data"
         leaf_mask = sample_output_path / "leaf_mask"
+        instance_mask = sample_output_path / "instance_mask"
         for p in (m_checker_path, o_checker_path, lesion_data_path, leaf_data_path, init_m_path, leaf_mask,
-                  pycn_distance_map, pycn_density_map):
+                  pycn_distance_map, pycn_density_map, instance_mask):
             p.mkdir(parents=True, exist_ok=True)
-        return m_checker_path, o_checker_path, lesion_data_path, leaf_data_path, init_m_path, leaf_mask, pycn_distance_map, pycn_density_map
+        return m_checker_path, o_checker_path, lesion_data_path, leaf_data_path, init_m_path, leaf_mask, pycn_distance_map, pycn_density_map, instance_mask
 
     def get_series(self):
         """
@@ -305,15 +306,17 @@ class SymptomTracker:
 
                 # if frame_number == 11:
                 #     print("stop")
+                instance_mask = np.zeros_like(seg)
                 for idx, contour in enumerate(contours):
 
-                    # print("----" + str(idx))
+                    print("----" + str(idx))
 
                     # get the roi
                     x, y, w, h = map(int, cv2.boundingRect(contour))
                     objects[idx] = (x, y, w, h)
                     rect = cv2.boundingRect(contour)
                     roi = lesion_utils.select_roi_2(rect=rect, mask=seg)
+                    
 
                     # check if is fully on the imaged leaf
                     in_leaf_checker = np.unique(leaf_mask[np.where(roi)[0], np.where(roi)[1]])[0]
@@ -352,6 +355,8 @@ class SymptomTracker:
                         object_matches[next_label] = (x, y, w, h)
                         current_label = next_label  # Update the label to the newly assigned label
                         next_label += 1
+
+                    instance_mask = np.where(roi, current_label, instance_mask)
 
                     # modify dimensions of the bounding rectangle
                     rect = lesion_utils.get_bounding_boxes(rect=rect)
@@ -452,6 +457,9 @@ class SymptomTracker:
                 # except:
                 #     self.log_fail(sample_name)
                 #     continue
+
+                # export instance mask
+                cv2.imwrite(f'{out_paths[8]}/{png_name}', instance_mask)
 
                 # Update the labels with the new matches
                 labels = object_matches
