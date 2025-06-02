@@ -375,7 +375,7 @@ def make_bbox_overlay(img, pts, box):
     if box is not None:
         box_ = np.intp(box)
         cv2.drawContours(overlay, [box_], 0, (255, 0, 0), 9)
-    overlay = cv2.resize(overlay, (0, 0), fx=0.25, fy=0.25)
+    overlay = cv2.resize(overlay, (0, 0), fx=0.15, fy=0.15)
     return overlay
 
 
@@ -400,7 +400,7 @@ def make_bbox_overlay_(img, pts, box):
     if box is not None:
         box_ = np.intp(box)
         cv2.drawContours(overlay, [box_], 0, (255, 0, 0), 9)
-    overlay = cv2.resize(overlay, (0, 0), fx=0.25, fy=0.25)
+    overlay = cv2.resize(overlay, (0, 0), fx=0.15, fy=0.15)
     return overlay
 
 

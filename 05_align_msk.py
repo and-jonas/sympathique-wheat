@@ -16,7 +16,7 @@ import multiprocessing
 # if __name__ == '__main__':
 
 # find all masks
-base_dir = 'Output'
+base_dir = 'processed'
 masks_seg = glob.glob(f'{base_dir}/*/predictions/symptoms_seg/pred/*.png')
 masks_det = glob.glob(f'{base_dir}/*/predictions/symptoms_det/pred/*.png')
 

@@ -2,7 +2,7 @@
 # ======================================================================================================================
 # Detects reference marks in images and exports corresponding image coordinates
 # Author: Jonas Anderegg jonas.anderegg@usys.ethz.ch
-# Last modified 2025-05-07
+# Last modified 2025-06-02
 # ======================================================================================================================
 
 from ultralytics import YOLO
@@ -18,7 +18,7 @@ model = YOLO('models/best.pt')
 dirs = [
     child.resolve()
     for year in ['2023', '2024']
-    for child in (Path('data') / year).iterdir()
+    for child in (Path('raw') / year).iterdir()
     if child.is_dir()
 ]
 

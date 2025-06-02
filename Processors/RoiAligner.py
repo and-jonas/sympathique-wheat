@@ -2,7 +2,7 @@
 # ======================================================================================================================
 # Aligns ROIs from images in a series
 # Author: Jonas Anderegg jonas.anderegg@usys.ethz.ch
-# Last modified 2024-02-15
+# Last modified 2025-06-02
 # ======================================================================================================================
 
 # import libraries
@@ -119,7 +119,6 @@ class RoiAligner:
 
             l_series = job["lseries"]
             i_series = job["iseries"]
-            m_series = job["mseries"]
 
             # check that there are an equal number of images and coordinate files
             if len(l_series) != len(i_series):
@@ -834,13 +833,13 @@ class RoiAligner2:
                         pass
 
                     # Transform with the first image of the series as destination
-                    # PROJECTIVE
-                    tform_projective = transform.ProjectiveTransform()
-                    try:
-                        tform_projective.estimate(src_, dst_)
-                    except:
-                        self.log_fail(image_id, type="projective", reason="transform_fail")
-                        continue
+                    # # PROJECTIVE
+                    # tform_projective = transform.ProjectiveTransform()
+                    # try:
+                    #     tform_projective.estimate(src_, dst_)
+                    # except:
+                    #     self.log_fail(image_id, type="projective", reason="transform_fail")
+                    #     continue
                     # PIECEWISE
                     tform_piecewise = transform.PiecewiseAffineTransform()
                     try:
@@ -850,12 +849,12 @@ class RoiAligner2:
                         continue
 
                     # Save
-                    # PROJECTIVE
-                    roi_loc['transformation_matrix'] = tform_projective.params.tolist()
-                    projective_warped = skimage.transform.warp(save_img, tform_projective,
-                                                                output_shape=(init_roi_height, init_roi_width))
-                    projective_warped = skimage.util.img_as_ubyte(projective_warped)
-                    cv2.imwrite(f'{result_proj}/{image_id}.JPG', cv2.cvtColor(projective_warped, cv2.COLOR_BGR2RGB))
+                    # # PROJECTIVE
+                    # roi_loc['transformation_matrix'] = tform_projective.params.tolist()
+                    # projective_warped = skimage.transform.warp(save_img, tform_projective,
+                    #                                             output_shape=(init_roi_height, init_roi_width))
+                    # projective_warped = skimage.util.img_as_ubyte(projective_warped)
+                    # cv2.imwrite(f'{result_proj}/{image_id}.JPG', cv2.cvtColor(projective_warped, cv2.COLOR_BGR2RGB))
                     # PIECEWISE
                     with open(f'{roi_path}/{image_id}_tform_piecewise.pkl', 'wb') as file:
                         pickle.dump(tform_piecewise, file)
