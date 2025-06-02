@@ -2,7 +2,7 @@
 # ======================================================================================================================
 # Tracks developing lesions in time series of images and extracts data for each lesion and leaf
 # Author: Jonas Anderegg jonas.anderegg@usys.ethz.ch
-# Last modified 2024-02-15
+# Last modified 2025-06-02
 # ======================================================================================================================
 
 from pathlib import Path
@@ -274,11 +274,82 @@ class SymptomTracker:
                 cv2.imwrite(f'{out_paths[4]}/{png_name}', seg)
 
                 # ==================================================================================================================
-                # 4. Analyze each lesion: label and extract data
+                # 5. Analyze leaf
                 # ==================================================================================================================
 
                 # find contours
                 contours, _ = cv2.findContours(seg, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+
+                # summary stats
+                la_tot = (frame_.shape[0] * frame_.shape[1]) - len(
+                    np.where(frame_ == 0)[0])  # roi area - background pixels
+                la_damaged = len(np.where((frame_ != 0) & (frame_ != 42))[0])
+                la_healthy = len(np.where(frame_ == 42)[0])
+                la_damaged_f = la_damaged / la_tot
+                la_healthy_f = la_healthy / la_tot
+                la_insect = len(np.where(frame_ == 127)[0])
+                n_pycn = len(np.where(frame_ == 212)[0])
+                rust_idx = np.where(frame_ == 255)
+                rust_point_list = base_utils.filter_points(x=rust_idx[1], y=rust_idx[0], min_distance=7)
+                n_rust = len(rust_point_list)
+                n_lesion = len(contours)
+                placl = len(np.where((frame_ == 85) | (frame_ == 212))[0]) / (la_tot - la_insect)
+                pycn_density = n_pycn / (la_tot - la_insect)
+                rust_density = n_rust / (la_tot - la_insect)
+
+                # distribution metrics
+                out = ndi.distance_transform_edt(np.bitwise_not(seg))
+                out[frame_ == 0] = np.nan
+                out[out == 0] = np.nan
+                mean_dist = np.nanmean(out)
+                std_dist = np.nanstd(out)
+                cv_dist = std_dist / mean_dist
+                n_comps, _, _, centroids = cv2.connectedComponentsWithStats(seg, connectivity=8)
+                if n_comps > 2:
+                    distance = cdist(centroids[1:], centroids[1:], metric='euclidean')
+                    np.fill_diagonal(distance, np.nan)
+                    shortest_dist = np.nanmin(distance, axis=1)
+                    mean_shortest_dist = np.mean(shortest_dist)
+                    std_shortest_dist = np.std(shortest_dist)
+                    cv_shortest_dist = std_shortest_dist / mean_shortest_dist
+                else:
+                    mean_shortest_dist = np.nan
+                    std_shortest_dist = np.nan
+                    cv_shortest_dist = np.nan
+
+                # grab data
+                leaf_data = [
+                    {
+                        'la_tot': la_tot,
+                        'la_damaged': la_damaged,
+                        'la_healthy': la_healthy,
+                        'la_damaged_f': la_damaged_f,
+                        'la_healthy_f': la_healthy_f,
+                        'la_insect': la_insect,
+                        'n_pycn': n_pycn,
+                        'n_rust': n_rust,
+                        'n_lesion': n_lesion,
+                        'placl': placl,
+                        'pycn_density': pycn_density,
+                        'rust_density': rust_density,
+                        'mean_dist': mean_dist,
+                        'std_dist': std_dist,
+                        'cv_dist': cv_dist,
+                        'mean_shortest_dist': mean_shortest_dist,
+                        'std_shortest_dist': std_shortest_dist,
+                        'cv_shortest_dist': cv_shortest_dist,
+                    },
+                ]
+
+                # Create a DataFrame from the list of dictionaries
+                df = pd.DataFrame(leaf_data)
+
+                # Export the DataFrame to a CSV file
+                df.to_csv(f'{out_paths[3]}/{data_name}', index=False)
+
+                # ==================================================================================================================
+                # 4. Analyze each lesion: label and extract data
+                # ==================================================================================================================
 
                 # if not lesions are found, the original image without overlay is saved
                 if len(contours) < 1:
@@ -309,7 +380,7 @@ class SymptomTracker:
                 instance_mask = np.zeros_like(seg)
                 for idx, contour in enumerate(contours):
 
-                    print("----" + str(idx))
+                    # print("----" + str(idx))
 
                     # get the roi
                     x, y, w, h = map(int, cv2.boundingRect(contour))
@@ -464,77 +535,6 @@ class SymptomTracker:
                 # Update the labels with the new matches
                 labels = object_matches
                 all_objects = objects
-
-                # ==================================================================================================================
-                # 5. Analyze leaf
-                # ==================================================================================================================
-
-                # summary stats
-                la_tot = (frame_.shape[0] * frame_.shape[1]) - len(
-                    np.where(frame_ == 0)[0])  # roi area - background pixels
-                la_damaged = len(np.where((frame_ != 0) & (frame_ != 42))[0])
-                la_healthy = len(np.where(frame_ == 42)[0])
-                la_damaged_f = la_damaged / la_tot
-                la_healthy_f = la_healthy / la_tot
-                la_insect = len(np.where(frame_ == 127)[0])
-                n_pycn = len(np.where(frame_ == 212)[0])
-                rust_idx = np.where(frame_ == 255)
-                rust_point_list = base_utils.filter_points(x=rust_idx[1], y=rust_idx[0], min_distance=7)
-                n_rust = len(rust_point_list)
-                n_lesion = len(contours)
-                placl = len(np.where((frame_ == 85) | (frame_ == 212))[0]) / (la_tot - la_insect)
-                pycn_density = n_pycn / (la_tot - la_insect)
-                rust_density = n_rust / (la_tot - la_insect)
-
-                # distribution metrics
-                out = ndi.distance_transform_edt(np.bitwise_not(seg))
-                out[frame_ == 0] = np.nan
-                out[out == 0] = np.nan
-                mean_dist = np.nanmean(out)
-                std_dist = np.nanstd(out)
-                cv_dist = std_dist / mean_dist
-                n_comps, output, stats, centroids = cv2.connectedComponentsWithStats(seg, connectivity=8)
-                if n_comps > 2:
-                    distance = cdist(centroids[1:], centroids[1:], metric='euclidean')
-                    np.fill_diagonal(distance, np.nan)
-                    shortest_dist = np.nanmin(distance, axis=1)
-                    mean_shortest_dist = np.mean(shortest_dist)
-                    std_shortest_dist = np.std(shortest_dist)
-                    cv_shortest_dist = std_shortest_dist / mean_shortest_dist
-                else:
-                    mean_shortest_dist = np.nan
-                    std_shortest_dist = np.nan
-                    cv_shortest_dist = np.nan
-
-                # grab data
-                leaf_data = [
-                    {
-                        'la_tot': la_tot,
-                        'la_damaged': la_damaged,
-                        'la_healthy': la_healthy,
-                        'la_damaged_f': la_damaged_f,
-                        'la_healthy_f': la_healthy_f,
-                        'la_insect': la_insect,
-                        'n_pycn': n_pycn,
-                        'n_rust': n_rust,
-                        'n_lesion': n_lesion,
-                        'placl': placl,
-                        'pycn_density': pycn_density,
-                        'rust_density': rust_density,
-                        'mean_dist': mean_dist,
-                        'std_dist': std_dist,
-                        'cv_dist': cv_dist,
-                        'mean_shortest_dist': mean_shortest_dist,
-                        'std_shortest_dist': std_shortest_dist,
-                        'cv_shortest_dist': cv_shortest_dist,
-                    },
-                ]
-
-                # Create a DataFrame from the list of dictionaries
-                df = pd.DataFrame(leaf_data)
-
-                # Export the DataFrame to a CSV file
-                df.to_csv(f'{out_paths[3]}/{data_name}', index=False)
 
                 # ==================================================================================================================
                 # 6. Create output
