@@ -59,7 +59,6 @@ dependencies:
       - torch==2.2.0
       - torchvision==0.17.0
       - tqdm==4.66.2
-      - triton==2.2.0
       - typing-extensions==4.9.0
       - tzdata==2023.4
       - ultralytics==8.0.132

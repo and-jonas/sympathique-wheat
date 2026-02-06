@@ -84,10 +84,10 @@ class LeafDataset:
     def __init__(self, base_dir, leaf_uid=None, load=('images', 'tforms', 'rois', 'target_masks', 'target_images')):
         self.base_dir = base_dir
         self.leaf_uid = leaf_uid
-        self.series = utils.get_series(path_images=os.path.join(base_dir, "data", "*", "*"), leaf_uid=leaf_uid)[0]
+        self.series = utils.get_series(path_images=os.path.join(base_dir, "raw", "*", "*"), leaf_uid=leaf_uid)[0]
         self.image_uids = [os.path.basename(p) for p in self.series]
-        self.output_base = os.path.join(base_dir, "Output", self.leaf_uid)
-        self.output_ts = os.path.join(base_dir, "Output", "ts")
+        self.output_base = os.path.join(base_dir, "processed", "reg", self.leaf_uid)
+        self.output_ts = os.path.join(base_dir, "processed", "ts")
         self.shift_affine = np.array([[1, 0, 10000], [0, 1, 10000], [0, 0, 1]])
 
         # Initialize data containers
@@ -446,6 +446,60 @@ class LeafDataset:
             det_mask_ = np.where(det_mask_ == 0, det_mask_, det_mask_ + 4)
             seg_mask_ = np.asarray(self.seg_masks[i])
             self.symptoms_masks.append(np.where(det_mask_ == 0, seg_mask_, det_mask_))
+
+
+    def get_roi_leaf_mask(self):
+
+        self.roi_leaf_masks = []
+        self.roi_leaf_images = []
+
+        for i in tqdm(range(len(self.images)), desc="Processing series"):
+
+            # get elements
+            roi = self.rois[i]
+            bbox = np.asarray(roi["bounding_box"])
+            box = np.intp(bbox)
+            rot = np.asarray(roi['rotation_matrix'])
+            
+            rows, cols = np.asarray(self.images[i]).shape[:2]
+            _, mh = map(int, np.mean(box, axis=0))
+            target = np.asarray(self.target_images[i])
+            symptoms_mask = self.symptoms_masks[i]
+
+            # full mask
+            full_mask = np.zeros((rows, cols)).astype("uint8")
+            full_mask[mh - 1024:mh + 1024, :] = symptoms_mask
+
+            # binarize
+            leaf_mask = np.where(full_mask == 0, 0, 1).astype("uint8")
+            
+            # rotate mask
+            leaf_mask_rot = cv2.warpAffine(leaf_mask, rot, (cols, rows))
+
+            # crop roi
+            roi_mask = leaf_mask_rot[box[0][1]:box[2][1], box[0][0]:box[1][0]]
+
+            # image
+            image = np.asarray(self.images[i])
+
+            # rotate image
+            leaf_image_rot = cv2.warpAffine(image, rot, (cols, rows))
+
+            # crop image roi
+            roi_image = leaf_image_rot[box[0][1]:box[2][1], box[0][0]:box[1][0]]
+
+            self.roi_leaf_masks.append(roi_mask)
+            self.roi_leaf_images.append(roi_image)
+
+            # # get leaf mask
+            # leaf_mask = utils.remove_points_from_mask(mask=full_mask, classes=kpt_cls)
+
+            # # rotate mask
+            # segmentation_mask_rot = cv2.warpAffine(segmentation_mask, rot, (cols, rows))
+
+            # # crop roi
+            # roi = segmentation_mask_rot[box[0][1]:box[2][1], box[0][0]:box[1][0]]
+
 
     def warp_masks(self, kpt_cls=[5,6], n_cls=6):
 
